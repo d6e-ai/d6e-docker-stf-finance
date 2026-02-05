@@ -10,8 +10,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy shared utilities
-COPY ../shared ./shared/
+# Copy shared utilities (must be copied to STF dir before build)
+COPY shared/ ./shared/
 
 # Copy main application
 COPY main.py .
