@@ -1,145 +1,108 @@
-# STF: Variance Analysis
+# D6E Variance Analysis STF
 
-D6E Docker STF for financial variance analysis.
+予算対実績分析、期間比較、差異分解、ウォーターフォールチャート生成を行う Docker STF です。
 
-## Overview
+**Docker Image**: `ghcr.io/d6e-ai/stf-variance-analysis:latest`
 
-This STF performs variance analysis:
+## LLM/AI エージェント向け使用方法
 
-- **Budget vs Actual**: Compare actual results to budget
-- **Period-over-Period**: Compare sequential periods
-- **Variance Decomposition**: Break down into price/volume/mix effects
-- **Waterfall Generation**: Create bridge chart data
-- **Narrative Generation**: Template-based variance explanations
+この Docker イメージを D6E AI エージェントから使用する場合、以下の手順で STF を作成してください。
 
-## Operations
+### ステップ 1: STF の作成
 
-### `analyze_budget_variance`
-
-Compare actual results to budget with materiality flagging.
-
-**Input:**
-
-```json
-{
-  "operation": "analyze_budget_variance",
-  "period": "2025-01",
-  "budget_version": "ORIGINAL",
-  "account_type": "EXPENSE",
-  "department_id": "uuid-optional",
-  "materiality_thresholds": {
-    "large_accounts": { "dollar": 500000, "percentage": 0.05 },
-    "medium_accounts": { "dollar": 100000, "percentage": 0.10 },
-    "small_accounts": { "dollar": 50000, "percentage": 0.15 }
-  }
-}
+```javascript
+d6e_create_stf({
+  name: "variance-analysis",
+  description:
+    "Analyze financial variances with budget vs actual and period comparisons",
+});
 ```
 
-**Output:**
+### ステップ 2: STF バージョンの作成
 
-```json
-{
-  "output": {
-    "status": "success",
-    "data": {
-      "analysis_type": "BUDGET_VS_ACTUAL",
-      "period": "2025-01",
-      "summary": {
-        "total_actual": 850000,
-        "total_budget": 900000,
-        "total_variance_dollar": -50000,
-        "total_variance_percent": -0.0556,
-        "material_variance_count": 3
-      },
-      "variances": [...],
-      "material_variances": [
-        {
-          "account_code": "6100",
-          "account_name": "Salaries",
-          "actual": 500000,
-          "budget": 450000,
-          "variance_dollar": 50000,
-          "variance_percent": 0.111,
-          "is_favorable": false,
-          "is_material": true
-        }
-      ]
-    }
-  }
-}
+```javascript
+d6e_create_stf_version({
+  stf_id: "{ステップ1で取得したstf_id}",
+  version: "1.0.0",
+  runtime: "docker",
+  code: '{"image":"ghcr.io/d6e-ai/stf-variance-analysis:latest"}',
+});
 ```
 
-### `analyze_period_variance`
+**重要**: `runtime`は必ず`"docker"`を指定し、`code`フィールドには JSON 文字列として`{"image":"ghcr.io/d6e-ai/stf-variance-analysis:latest"}`を設定してください。
 
-Compare current period to prior period.
+### ステップ 3: ワークフローの作成
 
-**Input:**
-
-```json
-{
-  "operation": "analyze_period_variance",
-  "current_period": "2025-02",
-  "comparison_period": "2025-01",
-  "account_type": "REVENUE"
-}
+```javascript
+d6e_create_workflow({
+  name: "variance-analysis-workflow",
+  input_steps: [],
+  stf_steps: [
+    {
+      stf_id: "{stf_id}",
+      version: "1.0.0",
+    },
+  ],
+  effect_steps: [],
+});
 ```
 
-### `decompose_variance`
+### ステップ 4: ワークフローの実行
 
-Break down variance into contributing factors.
+```javascript
+// ウォーターフォールチャート生成（データベース不要）
+d6e_execute_workflow({
+  workflow_id: "{workflow_id}",
+  input: {
+    operation: "generate_waterfall",
+    start_value: 1000000,
+    end_value: 1150000,
+    drivers: [
+      { name: "新規顧客", amount: 80000 },
+      { name: "既存顧客拡大", amount: 50000 },
+      { name: "価格改定", amount: 30000 },
+      { name: "解約", amount: -10000 },
+    ],
+    title: "Q1売上ブリッジ",
+  },
+});
 
-**Input:**
+// 予算対実績分析
+d6e_execute_workflow({
+  workflow_id: "{workflow_id}",
+  input: {
+    operation: "analyze_budget_variance",
+    period: "2025-01",
+    budget_version: "ORIGINAL",
+  },
+});
 
-```json
-{
-  "operation": "decompose_variance",
-  "account_code": "4100",
-  "period": "2025-01",
-  "comparison_period": "2024-01",
-  "decomposition_type": "PRICE_VOLUME"
-}
+// 期間比較分析
+d6e_execute_workflow({
+  workflow_id: "{workflow_id}",
+  input: {
+    operation: "analyze_period_variance",
+    current_period: "2025-01",
+    comparison_period: "2024-01",
+  },
+});
 ```
 
-**Output:**
+## サポートされている操作
 
-```json
-{
-  "output": {
-    "status": "success",
-    "data": {
-      "account_code": "4100",
-      "total_variance": 100000,
-      "decomposition": {
-        "type": "PRICE_VOLUME",
-        "components": [
-          {
-            "name": "Volume Effect",
-            "amount": 60000,
-            "percentage_of_variance": 0.6,
-            "description": "Change due to volume/quantity differences"
-          },
-          {
-            "name": "Price Effect",
-            "amount": 30000,
-            "percentage_of_variance": 0.3
-          },
-          {
-            "name": "Mix Effect",
-            "amount": 10000,
-            "percentage_of_variance": 0.1
-          }
-        ]
-      }
-    }
-  }
-}
-```
+| Operation                     | 必須パラメータ                                | オプション                                        | DB 必要 | 説明                           |
+| ----------------------------- | --------------------------------------------- | ------------------------------------------------- | ------- | ------------------------------ |
+| `generate_waterfall`          | `start_value`, `end_value`, `drivers`         | `title`                                           | ❌      | ウォーターフォールチャート生成 |
+| `generate_variance_narrative` | `variance_item`                               | `additional_context`                              | ❌      | 差異説明文生成                 |
+| `analyze_budget_variance`     | `period`                                      | `budget_version`, `account_type`, `department_id` | ✅      | 予算対実績分析                 |
+| `analyze_period_variance`     | `current_period`, `comparison_period`         | `account_type`                                    | ✅      | 期間比較分析                   |
+| `decompose_variance`          | `account_code`, `period`, `comparison_period` | `decomposition_type`                              | ✅      | 差異分解（価格/数量/構成）     |
 
-### `generate_waterfall`
+## 入出力例
 
-Create waterfall/bridge chart data.
+### ウォーターフォールチャート生成（データベース不要）
 
-**Input:**
+**入力**:
 
 ```json
 {
@@ -147,25 +110,56 @@ Create waterfall/bridge chart data.
   "start_value": 1000000,
   "end_value": 1150000,
   "drivers": [
-    { "name": "Volume growth", "amount": 80000 },
-    { "name": "Price increase", "amount": 50000 },
-    { "name": "Mix shift", "amount": 30000 },
-    { "name": "FX impact", "amount": -10000 }
+    { "name": "新規顧客獲得", "amount": 80000 },
+    { "name": "既存顧客拡大", "amount": 50000 },
+    { "name": "価格改定", "amount": 30000 },
+    { "name": "解約", "amount": -10000 }
   ],
-  "title": "Q1 Revenue Bridge"
+  "title": "Q1売上ブリッジ"
 }
 ```
 
-**Output:**
+**出力**:
 
 ```json
 {
   "output": {
     "status": "success",
+    "operation": "generate_waterfall",
     "data": {
-      "title": "Q1 Revenue Bridge",
-      "bars": [...],
-      "text_representation": "WATERFALL: Q1 Revenue Bridge\n\nStarting Value           $1,000,000.00\n  |--[+] Volume growth      $80,000.00\n  ...",
+      "title": "Q1売上ブリッジ",
+      "start_value": 1000000,
+      "end_value": 1150000,
+      "total_change": 150000,
+      "bars": [
+        { "label": "Starting Value", "value": 1000000, "bar_type": "total" },
+        {
+          "label": "新規顧客獲得",
+          "value": 80000,
+          "bar_type": "increase",
+          "percentage_of_change": 0.533
+        },
+        {
+          "label": "既存顧客拡大",
+          "value": 50000,
+          "bar_type": "increase",
+          "percentage_of_change": 0.333
+        },
+        {
+          "label": "価格改定",
+          "value": 30000,
+          "bar_type": "increase",
+          "percentage_of_change": 0.2
+        },
+        {
+          "label": "解約",
+          "value": -10000,
+          "bar_type": "decrease",
+          "percentage_of_change": -0.067
+        },
+        { "label": "Ending Value", "value": 1150000, "bar_type": "total" }
+      ],
+      "text_representation": "WATERFALL: Q1売上ブリッジ\n\nStarting Value                            $1,000,000.00\n  |--[+] 新規顧客獲得                         $80,000.00\n  |--[+] 既存顧客拡大                         $50,000.00\n  |--[+] 価格改定                             $30,000.00\n  |--[-] 解約                                -$10,000.00\nEnding Value                              $1,150,000.00\n\nNet Change: $150,000.00 (15.0%)",
       "reconciliation": {
         "drivers_sum": 150000,
         "reconciles": true
@@ -175,18 +169,16 @@ Create waterfall/bridge chart data.
 }
 ```
 
-### `generate_variance_narrative`
+### 差異説明文生成（データベース不要）
 
-Generate narrative explanation for a variance.
-
-**Input:**
+**入力**:
 
 ```json
 {
   "operation": "generate_variance_narrative",
   "variance_item": {
     "account_code": "6100",
-    "account_name": "Salaries & Wages",
+    "account_name": "人件費",
     "actual": 500000,
     "budget": 450000,
     "variance_dollar": 50000,
@@ -194,11 +186,11 @@ Generate narrative explanation for a variance.
     "is_favorable": false,
     "is_material": true
   },
-  "additional_context": "Headcount increased by 3 FTEs in mid-January"
+  "additional_context": "1月中旬に3名のエンジニアを採用"
 }
 ```
 
-**Output:**
+**出力**:
 
 ```json
 {
@@ -206,9 +198,10 @@ Generate narrative explanation for a variance.
     "status": "success",
     "data": {
       "narrative": {
-        "headline": "Salaries & Wages: Unfavorable variance of $50,000.00 (11.1%)",
+        "headline": "人件費: Unfavorable variance of $50,000.00 (11.1%)",
         "summary": "Actual of $500,000.00 was $50,000.00 higher than budget of $450,000.00.",
-        "outlook": "This variance should be monitored in upcoming periods."
+        "outlook": "This variance should be monitored in upcoming periods.",
+        "additional_context": "1月中旬に3名のエンジニアを採用"
       },
       "suggested_actions": [
         "Investigate root cause with business owner",
@@ -220,23 +213,173 @@ Generate narrative explanation for a variance.
 }
 ```
 
-## Materiality Thresholds
+### 予算対実績分析
 
-Default thresholds (configurable per request):
+**入力**:
 
-| Account Size | Dollar Threshold | Percentage Threshold |
-|-------------|-----------------|---------------------|
-| > $10M      | $500K           | 5%                  |
-| $1M - $10M  | $100K           | 10%                 |
-| < $1M       | $50K            | 15%                 |
+```json
+{
+  "operation": "analyze_budget_variance",
+  "period": "2025-01",
+  "budget_version": "ORIGINAL",
+  "account_type": "EXPENSE"
+}
+```
 
-A variance is flagged as material if it exceeds **either** threshold.
+**出力**:
 
-## Build & Test
+```json
+{
+  "output": {
+    "status": "success",
+    "data": {
+      "analysis_type": "BUDGET_VS_ACTUAL",
+      "period": "2025-01",
+      "summary": {
+        "total_actual": 1098000,
+        "total_budget": 1044000,
+        "total_variance_dollar": 54000,
+        "total_variance_percent": 0.052,
+        "material_variance_count": 3
+      },
+      "material_variances": [
+        {
+          "account_code": "6000",
+          "account_name": "R&D - Salaries",
+          "actual": 280000,
+          "budget": 260000,
+          "variance_dollar": 20000,
+          "variance_percent": 0.077,
+          "is_favorable": false,
+          "is_material": true
+        }
+      ]
+    }
+  }
+}
+```
+
+## 🤖 AI エージェントへのプロンプト
+
+### 基本プロンプト（データベース不要）
+
+```
+D6Eで差異分析を行うDockerスキルを使用してください。
+
+Docker Image: ghcr.io/d6e-ai/stf-variance-analysis:latest
+
+使用手順:
+1. d6e_create_stf でSTFを作成（name: "variance-analysis"）
+2. d6e_create_stf_version で以下を指定:
+   - runtime: "docker"
+   - code: "{\"image\":\"ghcr.io/d6e-ai/stf-variance-analysis:latest\"}"
+3. d6e_create_workflow でワークフローを作成
+4. d6e_execute_workflow で実行
+
+データベース不要の操作:
+- "generate_waterfall": ウォーターフォールチャート（start_value, end_value, drivers必須）
+- "generate_variance_narrative": 差異説明文（variance_item必須）
+
+データベース必要な操作:
+- "analyze_budget_variance": 予算対実績（period必須）
+- "analyze_period_variance": 期間比較（current_period, comparison_period必須）
+- "decompose_variance": 差異分解（account_code, period, comparison_period必須）
+
+まずはウォーターフォールチャートで動作確認してください。
+```
+
+### ウォーターフォールチャートを作成するプロンプト
+
+```
+以下の売上変動要因でウォーターフォールチャートを作成してください。
+
+前期売上: 10,000,000円
+当期売上: 11,500,000円
+
+変動要因:
+- 新規顧客獲得: +800,000円
+- 既存顧客アップセル: +500,000円
+- 価格改定効果: +300,000円
+- 解約: -100,000円
+
+使用スキル:
+- Docker Image: ghcr.io/d6e-ai/stf-variance-analysis:latest
+- 操作: generate_waterfall
+
+テキスト形式のウォーターフォールと、各要因が全体変動に占める割合を表示してください。
+```
+
+### 完全な実行例プロンプト（予算分析）
+
+```
+2025年1月の費用予算対実績分析を行ってください。
+
+Docker Image: ghcr.io/d6e-ai/stf-variance-analysis:latest
+
+実行ステップ:
+1. STF作成（name: "variance-analysis", runtime: "docker"）
+
+2. ポリシー設定:
+   - ポリシーグループ作成
+   - STFをグループに追加
+   - 以下のテーブルへのSELECTポリシー作成:
+     - accounts
+     - chart_of_accounts
+     - account_balances
+     - budgets
+     - fiscal_periods
+
+3. ワークフロー作成・実行:
+   - operation: "analyze_budget_variance"
+   - period: "2025-01"
+   - budget_version: "ORIGINAL"
+   - account_type: "EXPENSE"
+
+4. 分析結果:
+   - 重要性基準を超えた差異のリスト
+   - 各差異が有利か不利か
+   - 推奨アクション
+
+重要な差異については、generate_variance_narrative操作で説明文を生成してください。
+```
+
+## 重要性基準（Materiality Thresholds）
+
+デフォルトの重要性基準（リクエストごとにカスタマイズ可能）:
+
+| 勘定科目規模          | 金額基準 | 率基準 |
+| --------------------- | -------- | ------ |
+| > 1,000 万円          | 50 万円  | 5%     |
+| 100 万円 - 1,000 万円 | 10 万円  | 10%    |
+| < 100 万円            | 5 万円   | 15%    |
+
+差異が**いずれかの基準**を超えた場合、重要な差異としてフラグされます。
+
+## トラブルシューティング
+
+### 予算データが見つからない
+
+```
+Error: No budget found for period 2025-01
+```
+
+**解決策**: `budgets`テーブルに該当期間・バージョンの予算データが存在することを確認してください。
+
+### ポリシーエラー
+
+```
+Error: Policy violation - SELECT not allowed on table 'budgets'
+```
+
+**解決策**: STF に対して必要なテーブルへの SELECT ポリシーを設定してください。
+
+## ローカルでのビルドとテスト
 
 ```bash
+# ビルド
 docker build -t stf-variance-analysis:latest .
 
+# テスト（データベース不要）
 echo '{
   "workspace_id": "test-ws",
   "stf_id": "test-stf",
@@ -256,3 +399,9 @@ echo '{
   "sources": {}
 }' | docker run --rm -i stf-variance-analysis:latest
 ```
+
+## 関連ドキュメント
+
+- [データベーススキーマ](../docs/DATABASE_SCHEMA.md)
+- [サンプルデータ](../docs/SAMPLE_DATA.sql)
+- [プロジェクト README](../README.md)

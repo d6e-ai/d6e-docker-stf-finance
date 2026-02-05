@@ -1,37 +1,266 @@
-# D6E Finance STF Suite
+# D6E Finance Docker STF Suite
 
-Docker-based State Transition Functions (STFs) for financial workflows on the D6E platform.
+財務・経理業務を D6E ワークフローで実行するための Docker STF スイートです。
 
-## Overview
+## Docker Images
 
-This repository contains 5 Docker STFs implementing financial workflows based on the [Anthropic Knowledge Work Plugins - Finance](https://github.com/anthropics/knowledge-work-plugins/tree/main/finance):
+| STF                  | Docker Image                                     | 説明                                                   |
+| -------------------- | ------------------------------------------------ | ------------------------------------------------------ |
+| Financial Statements | `ghcr.io/d6e-ai/stf-financial-statements:latest` | 損益計算書、貸借対照表、キャッシュフロー計算書、試算表 |
+| Journal Entry        | `ghcr.io/d6e-ai/stf-journal-entry:latest`        | 仕訳帳作成、減価償却、前払費用償却、未払費用計上       |
+| Variance Analysis    | `ghcr.io/d6e-ai/stf-variance-analysis:latest`    | 予算対実績分析、期間比較、ウォーターフォールチャート   |
+| Reconciliation       | `ghcr.io/d6e-ai/stf-reconciliation:latest`       | 銀行照合、GL 対補助元帳照合、会社間照合                |
+| Close Management     | `ghcr.io/d6e-ai/stf-close-management:latest`     | 月次決算タスク管理、進捗追跡、ブロッカー特定           |
 
-| STF | Description | Key Operations |
-|-----|-------------|----------------|
-| **stf-financial-statements** | Generate GAAP financial statements | Income Statement, Balance Sheet, Cash Flow, Trial Balance |
-| **stf-journal-entry** | Prepare and validate journal entries | Create entries, depreciation, amortization, accruals |
-| **stf-variance-analysis** | Analyze financial variances | Budget vs Actual, Period comparison, Waterfall charts |
-| **stf-reconciliation** | Reconcile accounts | Bank rec, GL-Subledger, Intercompany |
-| **stf-close-management** | Manage month-end close | Task tracking, dependencies, progress monitoring |
+## クイックスタート（LLM/AI エージェント向け）
 
-## Quick Start
+### ステップ 1: STF の作成
 
-### 1. Build All Images
-
-```bash
-./scripts/build-all.sh
+```javascript
+d6e_create_stf({
+  name: "financial-statements",
+  description: "Generate GAAP financial statements",
+});
 ```
 
-Or build individually:
+### ステップ 2: STF バージョンの作成
+
+```javascript
+d6e_create_stf_version({
+  stf_id: "{ステップ1で取得したstf_id}",
+  version: "1.0.0",
+  runtime: "docker",
+  code: '{"image":"ghcr.io/d6e-ai/stf-financial-statements:latest"}',
+});
+```
+
+**重要**: `runtime`は必ず`"docker"`を指定し、`code`フィールドには JSON 文字列として Docker イメージを設定してください。
+
+### ステップ 3: ワークフローの作成
+
+```javascript
+d6e_create_workflow({
+  name: "finance-workflow",
+  input_steps: [],
+  stf_steps: [
+    {
+      stf_id: "{stf_id}",
+      version: "1.0.0",
+    },
+  ],
+  effect_steps: [],
+});
+```
+
+### ステップ 4: ワークフローの実行
+
+```javascript
+d6e_execute_workflow({
+  workflow_id: "{workflow_id}",
+  input: {
+    operation: "generate_trial_balance",
+    period: "2025-01",
+  },
+});
+```
+
+## 🤖 AI エージェントへのプロンプト
+
+### 財務諸表を生成する
+
+```
+D6Eで2025年1月の財務諸表を生成してください。
+
+Docker Image: ghcr.io/d6e-ai/stf-financial-statements:latest
+操作: generate_trial_balance
+パラメータ: period: "2025-01"
+
+手順:
+1. STF作成（runtime: "docker"）
+2. ポリシー設定（accounts, account_balances等へのSELECT）
+3. ワークフロー実行
+```
+
+### 決算カレンダーを作成する（データベース不要）
+
+```
+2025年1月の月次決算カレンダーを作成してください。
+
+Docker Image: ghcr.io/d6e-ai/stf-close-management:latest
+操作: generate_close_calendar
+パラメータ:
+- period: "2025-01"
+- period_end_date: "2025-01-31"
+- close_days: 5
+
+このOperationはデータベース不要で動作します。
+```
+
+### ウォーターフォールチャートを作成する（データベース不要）
+
+```
+売上変動のウォーターフォールチャートを作成してください。
+
+Docker Image: ghcr.io/d6e-ai/stf-variance-analysis:latest
+操作: generate_waterfall
+パラメータ:
+- start_value: 10000000
+- end_value: 11500000
+- drivers: [
+    {"name": "新規顧客", "amount": 800000},
+    {"name": "価格改定", "amount": 300000},
+    {"name": "解約", "amount": -100000}
+  ]
+- title: "Q1売上ブリッジ"
+```
+
+## プロジェクト構造
+
+```
+d6e-docker-stf-finance/
+├── shared/                          # 共通ユーティリティ
+│   └── utils.py                     # D6E API クライアント、入出力処理
+├── stf-financial-statements/        # 財務諸表STF
+│   ├── main.py
+│   ├── Dockerfile
+│   └── README.md
+├── stf-journal-entry/               # 仕訳帳STF
+│   ├── main.py
+│   ├── Dockerfile
+│   └── README.md
+├── stf-variance-analysis/           # 差異分析STF
+│   ├── main.py
+│   ├── Dockerfile
+│   └── README.md
+├── stf-reconciliation/              # 照合STF
+│   ├── main.py
+│   ├── Dockerfile
+│   └── README.md
+├── stf-close-management/            # 決算管理STF
+│   ├── main.py
+│   ├── Dockerfile
+│   └── README.md
+├── docs/
+│   ├── DATABASE_SCHEMA.md           # データベーススキーマ定義
+│   └── SAMPLE_DATA.sql              # テスト用サンプルデータ
+├── scripts/
+│   └── build-all.sh                 # 一括ビルドスクリプト
+└── .github/workflows/
+    └── docker-publish.yml           # CI/CD（ghcr.io公開）
+```
+
+## 各 STF の操作一覧
+
+### stf-financial-statements
+
+| 操作                        | 説明                       | DB 必要 |
+| --------------------------- | -------------------------- | ------- |
+| `generate_income_statement` | 損益計算書生成             | ✅      |
+| `generate_balance_sheet`    | 貸借対照表生成             | ✅      |
+| `generate_cash_flow`        | キャッシュフロー計算書生成 | ✅      |
+| `generate_trial_balance`    | 試算表生成                 | ✅      |
+
+### stf-journal-entry
+
+| 操作                             | 説明             | DB 必要 |
+| -------------------------------- | ---------------- | ------- |
+| `create_journal_entry`           | 仕訳帳作成       | ❌      |
+| `validate_journal_entry`         | 仕訳検証         | ❌      |
+| `calculate_depreciation`         | 減価償却計算     | ✅      |
+| `calculate_prepaid_amortization` | 前払費用償却     | ✅      |
+| `generate_accrual_entry`         | 未払費用仕訳生成 | ❌      |
+| `list_pending_entries`           | 承認待ち一覧     | ✅      |
+
+### stf-variance-analysis
+
+| 操作                          | 説明                       | DB 必要 |
+| ----------------------------- | -------------------------- | ------- |
+| `generate_waterfall`          | ウォーターフォールチャート | ❌      |
+| `generate_variance_narrative` | 差異説明文生成             | ❌      |
+| `analyze_budget_variance`     | 予算対実績分析             | ✅      |
+| `analyze_period_variance`     | 期間比較分析               | ✅      |
+| `decompose_variance`          | 差異分解                   | ✅      |
+
+### stf-reconciliation
+
+| 操作                         | 説明               | DB 必要 |
+| ---------------------------- | ------------------ | ------- |
+| `create_bank_reconciliation` | 銀行照合           | ✅      |
+| `create_gl_subledger_rec`    | GL 対補助元帳照合  | ✅      |
+| `create_intercompany_rec`    | 会社間照合         | ✅      |
+| `add_reconciling_item`       | 照合項目追加       | ✅      |
+| `analyze_aging`              | エイジング分析     | ✅      |
+| `get_reconciliation_status`  | 照合ステータス一覧 | ✅      |
+
+### stf-close-management
+
+| 操作                      | 説明                 | DB 必要 |
+| ------------------------- | -------------------- | ------- |
+| `generate_close_calendar` | 決算カレンダー生成   | ❌      |
+| `initialize_close_tasks`  | 決算タスク初期化     | ❌      |
+| `get_critical_path`       | クリティカルパス分析 | ❌      |
+| `update_task_status`      | タスクステータス更新 | ✅      |
+| `get_close_progress`      | 決算進捗取得         | ✅      |
+| `identify_blockers`       | ブロッカー特定       | ✅      |
+
+## データベース要件
+
+データベースを使用する操作を実行する場合、以下のテーブルが必要です：
+
+- `chart_of_accounts` - 勘定科目タイプ定義
+- `accounts` - 勘定科目マスタ
+- `departments` - 部門マスタ
+- `fiscal_periods` - 会計期間
+- `journal_entries` - 仕訳帳ヘッダ
+- `journal_lines` - 仕訳明細
+- `account_balances` - 期末残高
+- `budgets` - 予算データ
+- `reconciliations` - 照合レコード
+- `reconciling_items` - 照合項目
+- `close_tasks` - 決算タスク
+
+詳細は [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) を参照してください。
+
+## ポリシー設定
+
+STF がデータベースにアクセスするには、ポリシー設定が必要です：
+
+```javascript
+// 1. ポリシーグループ作成
+d6e_create_policy_group({ name: "finance-stf-group" });
+
+// 2. STFをグループに追加
+d6e_add_member_to_policy_group({
+  policy_group_id: "{group_id}",
+  member_type: "stf",
+  member_id: "{stf_id}",
+});
+
+// 3. SELECTポリシー作成
+d6e_create_policy({
+  policy_group_id: "{group_id}",
+  table_name: "account_balances",
+  operation: "select",
+  mode: "allow",
+});
+```
+
+## ローカルでのビルド
 
 ```bash
+# 全STFを一括ビルド
+./scripts/build-all.sh
+
+# 個別ビルド
+cp -r shared stf-financial-statements/shared
 cd stf-financial-statements
 docker build -t stf-financial-statements:latest .
 ```
 
-### 2. Test an STF
+## テスト
 
 ```bash
+# データベース不要の操作でテスト
 echo '{
   "workspace_id": "test-ws",
   "stf_id": "test-stf",
@@ -39,171 +268,46 @@ echo '{
   "api_url": "http://localhost:8080",
   "api_token": "test-token",
   "input": {
-    "operation": "generate_trial_balance",
-    "period": "2025-01"
+    "operation": "generate_close_calendar",
+    "period": "2025-01",
+    "period_end_date": "2025-01-31",
+    "close_days": 5
   },
   "sources": {}
-}' | docker run --rm -i stf-financial-statements:latest
+}' | docker run --rm -i stf-close-management:latest
 ```
 
-## Project Structure
+## ドキュメント
 
-```
-d6e-docker-stf-finance/
-├── docs/
-│   ├── DATABASE_SCHEMA.md    # Database schema documentation
-│   └── SAMPLE_DATA.sql       # Test data for development
-├── shared/
-│   └── utils.py              # Shared utilities for all STFs
-├── stf-financial-statements/ # Financial statement generation
-├── stf-journal-entry/        # Journal entry preparation
-├── stf-variance-analysis/    # Variance analysis
-├── stf-reconciliation/       # Account reconciliation
-├── stf-close-management/     # Close process management
-├── scripts/
-│   └── build-all.sh          # Build all Docker images
-└── README.md
-```
+- [データベーススキーマ](docs/DATABASE_SCHEMA.md)
+- [サンプルデータ](docs/SAMPLE_DATA.sql)
+- [stf-financial-statements README](stf-financial-statements/README.md)
+- [stf-journal-entry README](stf-journal-entry/README.md)
+- [stf-variance-analysis README](stf-variance-analysis/README.md)
+- [stf-reconciliation README](stf-reconciliation/README.md)
+- [stf-close-management README](stf-close-management/README.md)
 
-## Database Requirements
+## トラブルシューティング
 
-All STFs require access to the workspace database with the schema defined in `docs/DATABASE_SCHEMA.md`.
-
-Key tables:
-- `chart_of_accounts` - Account type definitions
-- `accounts` - Individual GL accounts
-- `departments` - Cost centers
-- `fiscal_periods` - Accounting periods
-- `journal_entries` / `journal_lines` - Transactions
-- `account_balances` - Period-end snapshots
-- `budgets` - Budget data
-- `reconciliations` / `reconciling_items` - Reconciliation tracking
-- `close_tasks` - Close task management
-
-## STF Input/Output Format
-
-### Input (via stdin)
-
-```json
-{
-  "workspace_id": "UUID",
-  "stf_id": "UUID",
-  "caller": "UUID | null",
-  "api_url": "http://api:8080",
-  "api_token": "internal_token",
-  "input": {
-    "operation": "operation_name",
-    ...parameters
-  },
-  "sources": {
-    "previous_step": { "output": {...} }
-  }
-}
-```
-
-### Output (via stdout)
-
-**Success:**
-```json
-{
-  "output": {
-    "status": "success",
-    "operation": "operation_name",
-    "data": {...}
-  }
-}
-```
-
-**Error:**
-```json
-{
-  "error": "Error message",
-  "type": "ErrorType"
-}
-```
-
-## Operations Summary
-
-### stf-financial-statements
-
-| Operation | Required Params | Description |
-|-----------|----------------|-------------|
-| `generate_income_statement` | `period` | Generate P&L with optional comparison |
-| `generate_balance_sheet` | `period` | Generate balance sheet |
-| `generate_cash_flow` | `period` | Generate cash flow (indirect method) |
-| `generate_trial_balance` | `period` | Generate trial balance |
-
-### stf-journal-entry
-
-| Operation | Required Params | Description |
-|-----------|----------------|-------------|
-| `create_journal_entry` | `entry_date`, `description`, `lines` | Create new journal entry |
-| `validate_journal_entry` | `entry` | Validate entry against rules |
-| `calculate_depreciation` | `period` | Generate depreciation entries |
-| `calculate_prepaid_amortization` | `period` | Generate amortization entries |
-| `generate_accrual_entry` | `accrual_type`, `period`, `amount`, ... | Create accrual with auto-reverse |
-| `list_pending_entries` | - | List entries pending approval |
-
-### stf-variance-analysis
-
-| Operation | Required Params | Description |
-|-----------|----------------|-------------|
-| `analyze_budget_variance` | `period` | Compare actual to budget |
-| `analyze_period_variance` | `current_period`, `comparison_period` | Period-over-period analysis |
-| `decompose_variance` | `account_code`, `period`, `comparison_period` | Price/volume/mix breakdown |
-| `generate_waterfall` | `start_value`, `end_value`, `drivers` | Create waterfall chart data |
-| `generate_variance_narrative` | `variance_item` | Generate variance explanation |
-
-### stf-reconciliation
-
-| Operation | Required Params | Description |
-|-----------|----------------|-------------|
-| `create_bank_reconciliation` | `bank_account_id`, `period`, `bank_statement_balance`, `bank_statement_date` | Bank rec |
-| `create_gl_subledger_rec` | `control_account_id`, `period`, `subledger_balance`, `subledger_source` | GL-SL rec |
-| `create_intercompany_rec` | `entity_a_account_id`, `entity_b_account_id`, `period` | IC rec |
-| `add_reconciling_item` | `reconciliation_id`, `item_date`, `description`, `amount`, `category` | Add rec item |
-| `analyze_aging` | - | Analyze reconciling item aging |
-| `get_reconciliation_status` | `period` | Get all rec status |
-
-### stf-close-management
-
-| Operation | Required Params | Description |
-|-----------|----------------|-------------|
-| `initialize_close_tasks` | `period`, `period_end_date` | Set up close tasks |
-| `update_task_status` | `task_id`, `new_status` | Update task status |
-| `get_close_progress` | `period` | Get overall progress |
-| `identify_blockers` | `period` | Find blocked tasks |
-| `generate_close_calendar` | `period`, `period_end_date` | Create close calendar |
-| `get_critical_path` | `period` | Identify critical path |
-
-## Development
-
-### Adding a New STF
-
-1. Create directory: `stf-new-function/`
-2. Copy structure from existing STF
-3. Implement `main.py` with operation handlers
-4. Create `Dockerfile`, `requirements.txt`, `README.md`
-5. Add to `scripts/build-all.sh`
-
-### Testing Locally
+### Docker イメージが見つからない
 
 ```bash
-# Build
-docker build -t my-stf:latest .
-
-# Test with sample input
-cat test-input.json | docker run --rm -i my-stf:latest
-
-# Debug mode
-docker run --rm -it --entrypoint /bin/bash my-stf:latest
+# ghcr.ioからpull
+docker pull ghcr.io/d6e-ai/stf-financial-statements:latest
 ```
 
-## License
+### ポリシーエラー
 
-MIT License - See LICENSE file for details.
+```
+Error: Policy violation - SELECT not allowed on table 'xxx'
+```
 
-## References
+STF に対して必要なテーブルへの SELECT ポリシーを設定してください。
 
-- [D6E Platform Documentation](https://docs.d6e.ai)
-- [Anthropic Knowledge Work Plugins - Finance](https://github.com/anthropics/knowledge-work-plugins/tree/main/finance)
+### 期間が見つからない
+
+```
+Error: No balance found for period 2025-01
+```
+
+`fiscal_periods`テーブルに該当期間が存在し、`account_balances`テーブルにデータがあることを確認してください。
