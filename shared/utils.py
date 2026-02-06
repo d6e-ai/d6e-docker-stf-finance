@@ -22,7 +22,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
-def configureLogging(level: logging.LogLevel = logging.INFO) -> logging.Logger:
+def configureLogging(level: int = logging.INFO) -> logging.Logger:
     """
     Configure logging to stderr (stdout is reserved for output).
     
