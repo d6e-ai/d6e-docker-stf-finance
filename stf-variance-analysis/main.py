@@ -16,6 +16,7 @@ Main Operations:
     - decompose_variance: Break down variance into drivers
     - generate_waterfall: Create waterfall chart data
     - generate_variance_narrative: Create explanatory text
+    - describe: Return the input schema and available operations
 
 Limitations:
     - Materiality thresholds are configurable but default to standard values
@@ -608,6 +609,160 @@ class VarianceAnalyzer:
             )
         }
     
+    def describe(self) -> Dict[str, Any]:
+        """
+        Return the input schema and available operations for this STF.
+        
+        Returns:
+            Schema description including all operations, their required
+            and optional parameters, and type information.
+        """
+        return {
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": [
+                            "analyze_budget_variance",
+                            "analyze_period_variance",
+                            "decompose_variance",
+                            "generate_waterfall",
+                            "generate_variance_narrative",
+                            "describe"
+                        ],
+                        "description": "The operation to execute"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Fiscal period name (e.g., '2025-01')"
+                    },
+                    "budget_version": {
+                        "type": "string",
+                        "description": "Budget version to compare against (default: ORIGINAL)"
+                    },
+                    "account_type": {
+                        "type": "string",
+                        "enum": ["REVENUE", "EXPENSE"],
+                        "description": "Optional filter by account type"
+                    },
+                    "department_id": {
+                        "type": "string",
+                        "description": "Optional department UUID to filter by"
+                    },
+                    "materiality_thresholds": {
+                        "type": "object",
+                        "description": "Custom materiality thresholds overriding defaults",
+                        "properties": {
+                            "large_accounts": {
+                                "type": "object",
+                                "properties": {
+                                    "dollar": {"type": "number"},
+                                    "percentage": {"type": "number"}
+                                }
+                            },
+                            "medium_accounts": {
+                                "type": "object",
+                                "properties": {
+                                    "dollar": {"type": "number"},
+                                    "percentage": {"type": "number"}
+                                }
+                            },
+                            "small_accounts": {
+                                "type": "object",
+                                "properties": {
+                                    "dollar": {"type": "number"},
+                                    "percentage": {"type": "number"}
+                                }
+                            }
+                        }
+                    },
+                    "current_period": {
+                        "type": "string",
+                        "description": "Current period name for period-over-period comparison"
+                    },
+                    "comparison_period": {
+                        "type": "string",
+                        "description": "Comparison period name"
+                    },
+                    "account_code": {
+                        "type": "string",
+                        "description": "Account code for variance decomposition"
+                    },
+                    "decomposition_type": {
+                        "type": "string",
+                        "enum": ["PRICE_VOLUME", "RATE_MIX"],
+                        "description": "Decomposition method (default: PRICE_VOLUME)"
+                    },
+                    "start_value": {
+                        "type": "number",
+                        "description": "Starting value for waterfall chart (e.g., budget or prior period)"
+                    },
+                    "end_value": {
+                        "type": "number",
+                        "description": "Ending value for waterfall chart (e.g., actual or current period)"
+                    },
+                    "drivers": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string", "description": "Driver name"},
+                                "amount": {"type": "number", "description": "Driver amount (signed)"}
+                            },
+                            "required": ["name", "amount"]
+                        },
+                        "description": "List of variance drivers for waterfall"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Chart title for waterfall (default: 'Variance Waterfall')"
+                    },
+                    "variance_item": {
+                        "type": "object",
+                        "description": "Variance data object for narrative generation"
+                    },
+                    "additional_context": {
+                        "type": "string",
+                        "description": "Optional additional context for narrative generation"
+                    }
+                },
+                "required": ["operation"]
+            },
+            "operations": {
+                "analyze_budget_variance": {
+                    "description": "Compare actual results to budget with materiality analysis",
+                    "required": ["period"],
+                    "optional": ["budget_version", "account_type", "department_id", "materiality_thresholds"]
+                },
+                "analyze_period_variance": {
+                    "description": "Compare current period to a prior period",
+                    "required": ["current_period", "comparison_period"],
+                    "optional": ["account_type"]
+                },
+                "decompose_variance": {
+                    "description": "Decompose variance into price, volume, and mix effects",
+                    "required": ["account_code", "period", "comparison_period"],
+                    "optional": ["decomposition_type"]
+                },
+                "generate_waterfall": {
+                    "description": "Generate waterfall chart data from variance drivers",
+                    "required": ["start_value", "end_value", "drivers"],
+                    "optional": ["title"]
+                },
+                "generate_variance_narrative": {
+                    "description": "Generate narrative explanation for a variance item",
+                    "required": ["variance_item"],
+                    "optional": ["additional_context"]
+                },
+                "describe": {
+                    "description": "Return the input schema and available operations",
+                    "required": [],
+                    "optional": []
+                }
+            }
+        }
+    
     def _checkMateriality(
         self,
         baseAmount: float,
@@ -645,7 +800,10 @@ def main():
         customThresholds = userInput.get("materiality_thresholds")
         analyzer = VarianceAnalyzer(apiClient, customThresholds)
         
-        if operation == "analyze_budget_variance":
+        if operation == "describe":
+            result = analyzer.describe()
+        
+        elif operation == "analyze_budget_variance":
             validateRequiredFields(userInput, ["period"])
             result = analyzer.analyzeBudgetVariance(
                 periodName=userInput["period"],
@@ -690,7 +848,7 @@ def main():
         else:
             raise ValueError(
                 f"Unknown operation: {operation}. "
-                f"Valid operations: analyze_budget_variance, analyze_period_variance, "
+                f"Valid operations: describe, analyze_budget_variance, analyze_period_variance, "
                 f"decompose_variance, generate_waterfall, generate_variance_narrative"
             )
         

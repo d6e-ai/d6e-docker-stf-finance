@@ -16,6 +16,7 @@ Main Operations:
     - add_reconciling_item: Add reconciling item to a rec
     - analyze_aging: Analyze aging of reconciling items
     - get_reconciliation_status: Get status of reconciliations
+    - describe: Return the input schema and available operations
 
 Limitations:
     - Bank transaction matching is rule-based, not ML-based
@@ -642,6 +643,147 @@ class ReconciliationManager:
             "all_items": allItems
         }
     
+    def describe(self) -> Dict[str, Any]:
+        """
+        Return the input schema and available operations for this STF.
+        
+        Returns:
+            Schema description including all operations, their required
+            and optional parameters, and type information.
+        """
+        return {
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": [
+                            "create_bank_reconciliation",
+                            "create_gl_subledger_rec",
+                            "create_intercompany_rec",
+                            "add_reconciling_item",
+                            "analyze_aging",
+                            "get_reconciliation_status",
+                            "describe"
+                        ],
+                        "description": "The operation to execute"
+                    },
+                    "bank_account_id": {
+                        "type": "string",
+                        "description": "GL cash account UUID for bank reconciliation"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Fiscal period name (e.g., '2025-01')"
+                    },
+                    "bank_statement_balance": {
+                        "type": "number",
+                        "description": "Balance per bank statement"
+                    },
+                    "bank_statement_date": {
+                        "type": "string",
+                        "description": "Date of bank statement in YYYY-MM-DD format"
+                    },
+                    "control_account_id": {
+                        "type": "string",
+                        "description": "GL control account UUID for GL-subledger reconciliation"
+                    },
+                    "subledger_balance": {
+                        "type": "number",
+                        "description": "Balance per subledger"
+                    },
+                    "subledger_source": {
+                        "type": "string",
+                        "description": "Source system name (e.g., 'AR_AGING', 'AP_AGING')"
+                    },
+                    "entity_a_account_id": {
+                        "type": "string",
+                        "description": "IC receivable/payable account UUID for Entity A"
+                    },
+                    "entity_b_account_id": {
+                        "type": "string",
+                        "description": "IC receivable/payable account UUID for Entity B"
+                    },
+                    "reconciliation_id": {
+                        "type": "string",
+                        "description": "Reconciliation UUID to add an item to"
+                    },
+                    "item_date": {
+                        "type": "string",
+                        "description": "Date of the reconciling item in YYYY-MM-DD format"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the reconciling item"
+                    },
+                    "amount": {
+                        "type": "number",
+                        "description": "Amount of the reconciling item (signed)"
+                    },
+                    "category": {
+                        "type": "string",
+                        "enum": ["TIMING", "ADJUSTMENT_REQUIRED", "INVESTIGATION"],
+                        "description": "Category of the reconciling item"
+                    },
+                    "reference": {
+                        "type": "string",
+                        "description": "Optional reference (check#, invoice#, etc.)"
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Optional notes"
+                    },
+                    "account_id": {
+                        "type": "string",
+                        "description": "Optional account UUID to filter aging analysis"
+                    },
+                    "reconciliation_type": {
+                        "type": "string",
+                        "enum": ["BANK", "GL_SUBLEDGER", "INTERCOMPANY"],
+                        "description": "Optional reconciliation type filter"
+                    }
+                },
+                "required": ["operation"]
+            },
+            "operations": {
+                "create_bank_reconciliation": {
+                    "description": "Create a bank reconciliation comparing GL balance to bank statement",
+                    "required": ["bank_account_id", "period", "bank_statement_balance", "bank_statement_date"],
+                    "optional": []
+                },
+                "create_gl_subledger_rec": {
+                    "description": "Create GL to subledger reconciliation",
+                    "required": ["control_account_id", "period", "subledger_balance", "subledger_source"],
+                    "optional": []
+                },
+                "create_intercompany_rec": {
+                    "description": "Create intercompany reconciliation between two entities",
+                    "required": ["entity_a_account_id", "entity_b_account_id", "period"],
+                    "optional": []
+                },
+                "add_reconciling_item": {
+                    "description": "Add a reconciling item to an existing reconciliation",
+                    "required": ["reconciliation_id", "item_date", "description", "amount", "category"],
+                    "optional": ["reference", "notes"]
+                },
+                "analyze_aging": {
+                    "description": "Analyze aging of open reconciling items",
+                    "required": [],
+                    "optional": ["account_id", "period"]
+                },
+                "get_reconciliation_status": {
+                    "description": "Get status summary of all reconciliations for a period",
+                    "required": ["period"],
+                    "optional": ["reconciliation_type"]
+                },
+                "describe": {
+                    "description": "Return the input schema and available operations",
+                    "required": [],
+                    "optional": []
+                }
+            }
+        }
+    
     def getReconciliationStatus(
         self,
         periodName: str,
@@ -743,7 +885,10 @@ def main():
         apiClient = createApiClient(inputData)
         manager = ReconciliationManager(apiClient)
         
-        if operation == "create_bank_reconciliation":
+        if operation == "describe":
+            result = manager.describe()
+        
+        elif operation == "create_bank_reconciliation":
             validateRequiredFields(userInput, [
                 "bank_account_id", "period", "bank_statement_balance", "bank_statement_date"
             ])
@@ -805,7 +950,7 @@ def main():
         else:
             raise ValueError(
                 f"Unknown operation: {operation}. "
-                f"Valid operations: create_bank_reconciliation, create_gl_subledger_rec, "
+                f"Valid operations: describe, create_bank_reconciliation, create_gl_subledger_rec, "
                 f"create_intercompany_rec, add_reconciling_item, analyze_aging, get_reconciliation_status"
             )
         

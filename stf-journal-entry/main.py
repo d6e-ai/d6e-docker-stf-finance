@@ -17,6 +17,7 @@ Main Operations:
     - calculate_prepaid_amortization: Generate prepaid amortization
     - generate_accrual_entry: Generate standard accrual entry
     - list_pending_entries: List entries pending approval
+    - describe: Return the input schema and available operations
 
 Limitations:
     - Does not actually post entries (creates in DRAFT status)
@@ -536,6 +537,154 @@ class JournalEntryManager:
         
         return entry
     
+    def describe(self) -> Dict[str, Any]:
+        """
+        Return the input schema and available operations for this STF.
+        
+        Returns:
+            Schema description including all operations, their required
+            and optional parameters, and type information.
+        """
+        return {
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": [
+                            "create_journal_entry",
+                            "validate_journal_entry",
+                            "calculate_depreciation",
+                            "calculate_prepaid_amortization",
+                            "generate_accrual_entry",
+                            "list_pending_entries",
+                            "describe"
+                        ],
+                        "description": "The operation to execute"
+                    },
+                    "entry_date": {
+                        "type": "string",
+                        "description": "Journal entry date in YYYY-MM-DD format"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Journal entry description"
+                    },
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "account_id": {"type": "string", "description": "Account UUID"},
+                                "debit_amount": {"type": "number", "description": "Debit amount (0 if credit line)"},
+                                "credit_amount": {"type": "number", "description": "Credit amount (0 if debit line)"},
+                                "department_id": {"type": "string", "description": "Optional department UUID"},
+                                "description": {"type": "string", "description": "Line description"},
+                                "reference": {"type": "string", "description": "Line reference"}
+                            },
+                            "required": ["account_id"]
+                        },
+                        "description": "Journal entry line items"
+                    },
+                    "entry_type": {
+                        "type": "string",
+                        "enum": ["STANDARD", "ADJUSTING", "CLOSING", "REVERSING"],
+                        "description": "Type of journal entry (default: STANDARD)"
+                    },
+                    "is_auto_reverse": {
+                        "type": "boolean",
+                        "description": "Whether the entry should auto-reverse in the next period"
+                    },
+                    "reverse_date": {
+                        "type": "string",
+                        "description": "Date for auto-reversal in YYYY-MM-DD format"
+                    },
+                    "created_by": {
+                        "type": "string",
+                        "description": "User who created the entry (default: SYSTEM)"
+                    },
+                    "entry": {
+                        "type": "object",
+                        "description": "Journal entry object to validate (for validate_journal_entry)"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Fiscal period name (e.g., '2025-01')"
+                    },
+                    "asset_category": {
+                        "type": "string",
+                        "description": "Optional filter by asset category (for calculate_depreciation)"
+                    },
+                    "accrual_type": {
+                        "type": "string",
+                        "description": "Type of accrual (e.g., AP_ACCRUAL, PAYROLL_ACCRUAL)"
+                    },
+                    "amount": {
+                        "type": "number",
+                        "description": "Accrual amount"
+                    },
+                    "expense_account_id": {
+                        "type": "string",
+                        "description": "Expense account UUID to debit"
+                    },
+                    "liability_account_id": {
+                        "type": "string",
+                        "description": "Liability account UUID to credit"
+                    },
+                    "department_id": {
+                        "type": "string",
+                        "description": "Optional department UUID"
+                    },
+                    "reference": {
+                        "type": "string",
+                        "description": "Optional reference (PO#, invoice#, etc.)"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Status filter for listing entries (default: DRAFT)"
+                    }
+                },
+                "required": ["operation"]
+            },
+            "operations": {
+                "create_journal_entry": {
+                    "description": "Create a new journal entry with balanced debit/credit lines",
+                    "required": ["entry_date", "description", "lines"],
+                    "optional": ["entry_type", "is_auto_reverse", "reverse_date", "created_by"]
+                },
+                "validate_journal_entry": {
+                    "description": "Validate a journal entry against business rules before posting",
+                    "required": ["entry"],
+                    "optional": []
+                },
+                "calculate_depreciation": {
+                    "description": "Calculate depreciation entries for fixed assets in a period",
+                    "required": ["period"],
+                    "optional": ["asset_category"]
+                },
+                "calculate_prepaid_amortization": {
+                    "description": "Calculate prepaid expense amortization entries for a period",
+                    "required": ["period"],
+                    "optional": []
+                },
+                "generate_accrual_entry": {
+                    "description": "Generate a standard accrual entry (auto-reversing)",
+                    "required": ["accrual_type", "period", "amount", "description", "expense_account_id", "liability_account_id"],
+                    "optional": ["department_id", "reference"]
+                },
+                "list_pending_entries": {
+                    "description": "List journal entries pending approval, optionally filtered",
+                    "required": [],
+                    "optional": ["period", "status"]
+                },
+                "describe": {
+                    "description": "Return the input schema and available operations",
+                    "required": [],
+                    "optional": []
+                }
+            }
+        }
+    
     def listPendingEntries(
         self,
         periodName: Optional[str] = None,
@@ -620,7 +769,10 @@ def main():
         apiClient = createApiClient(inputData)
         manager = JournalEntryManager(apiClient)
         
-        if operation == "create_journal_entry":
+        if operation == "describe":
+            result = manager.describe()
+        
+        elif operation == "create_journal_entry":
             validateRequiredFields(userInput, ["entry_date", "description", "lines"])
             result = manager.createJournalEntry(
                 entryDate=userInput["entry_date"],
@@ -674,7 +826,7 @@ def main():
         else:
             raise ValueError(
                 f"Unknown operation: {operation}. "
-                f"Valid operations: create_journal_entry, validate_journal_entry, "
+                f"Valid operations: describe, create_journal_entry, validate_journal_entry, "
                 f"calculate_depreciation, calculate_prepaid_amortization, "
                 f"generate_accrual_entry, list_pending_entries"
             )

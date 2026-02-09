@@ -14,6 +14,7 @@ Main Operations:
     - generate_balance_sheet: Create balance sheet as of period end
     - generate_cash_flow: Create cash flow statement
     - generate_trial_balance: Create trial balance report
+    - describe: Return the input schema and available operations
 
 Limitations:
     - Requires account_balances table populated with period-end balances
@@ -640,6 +641,73 @@ class FinancialStatementsGenerator:
         
         return statement
     
+    def describe(self) -> Dict[str, Any]:
+        """
+        Return the input schema and available operations for this STF.
+        
+        Returns:
+            Schema description including all operations, their required
+            and optional parameters, and type information.
+        """
+        return {
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": [
+                            "generate_income_statement",
+                            "generate_balance_sheet",
+                            "generate_cash_flow",
+                            "generate_trial_balance",
+                            "describe"
+                        ],
+                        "description": "The operation to execute"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Fiscal period name (e.g., '2025-01')"
+                    },
+                    "comparison_period": {
+                        "type": "string",
+                        "description": "Optional comparison period for period-over-period analysis"
+                    },
+                    "department_id": {
+                        "type": "string",
+                        "description": "Optional department UUID to filter by"
+                    }
+                },
+                "required": ["operation"]
+            },
+            "operations": {
+                "generate_income_statement": {
+                    "description": "Generate GAAP income statement (P&L) for a period with optional comparison",
+                    "required": ["period"],
+                    "optional": ["comparison_period", "department_id"]
+                },
+                "generate_balance_sheet": {
+                    "description": "Generate balance sheet as of period end with optional comparison",
+                    "required": ["period"],
+                    "optional": ["comparison_period"]
+                },
+                "generate_cash_flow": {
+                    "description": "Generate cash flow statement using indirect method",
+                    "required": ["period"],
+                    "optional": ["comparison_period"]
+                },
+                "generate_trial_balance": {
+                    "description": "Generate trial balance report with all accounts and debit/credit totals",
+                    "required": ["period"],
+                    "optional": []
+                },
+                "describe": {
+                    "description": "Return the input schema and available operations",
+                    "required": [],
+                    "optional": []
+                }
+            }
+        }
+    
     def generateTrialBalance(self, periodName: str) -> Dict[str, Any]:
         """
         Generate trial balance for specified period.
@@ -724,7 +792,10 @@ def main():
         generator = FinancialStatementsGenerator(apiClient)
         
         # Route to appropriate operation
-        if operation == "generate_income_statement":
+        if operation == "describe":
+            result = generator.describe()
+        
+        elif operation == "generate_income_statement":
             validateRequiredFields(userInput, ["period"])
             result = generator.generateIncomeStatement(
                 periodName=userInput["period"],
@@ -755,7 +826,7 @@ def main():
         else:
             raise ValueError(
                 f"Unknown operation: {operation}. "
-                f"Valid operations: generate_income_statement, generate_balance_sheet, "
+                f"Valid operations: describe, generate_income_statement, generate_balance_sheet, "
                 f"generate_cash_flow, generate_trial_balance"
             )
         

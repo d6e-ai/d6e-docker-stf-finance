@@ -17,6 +17,7 @@ Main Operations:
     - identify_blockers: Find blocked tasks and dependencies
     - generate_close_calendar: Create close calendar with deadlines
     - get_critical_path: Identify critical path tasks
+    - describe: Return the input schema and available operations
 
 Limitations:
     - Does not send notifications (returns notification data only)
@@ -594,6 +595,107 @@ class CloseManager:
         
         return "\n".join(lines)
     
+    def describe(self) -> Dict[str, Any]:
+        """
+        Return the input schema and available operations for this STF.
+        
+        Returns:
+            Schema description including all operations, their required
+            and optional parameters, and type information.
+        """
+        return {
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": [
+                            "initialize_close_tasks",
+                            "update_task_status",
+                            "get_close_progress",
+                            "identify_blockers",
+                            "generate_close_calendar",
+                            "get_critical_path",
+                            "describe"
+                        ],
+                        "description": "The operation to execute"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Fiscal period name (e.g., '2025-01')"
+                    },
+                    "period_end_date": {
+                        "type": "string",
+                        "description": "Last day of the period in YYYY-MM-DD format"
+                    },
+                    "close_days": {
+                        "type": "integer",
+                        "description": "Number of business days for close (default: 5)"
+                    },
+                    "assignees": {
+                        "type": "object",
+                        "description": "Mapping of task category to assignee name",
+                        "additionalProperties": {"type": "string"}
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "description": "Task UUID to update"
+                    },
+                    "new_status": {
+                        "type": "string",
+                        "enum": ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "BLOCKED"],
+                        "description": "New status for the task"
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Optional notes for task update"
+                    },
+                    "completed_by": {
+                        "type": "string",
+                        "description": "Who completed the task (if marking as COMPLETED)"
+                    }
+                },
+                "required": ["operation"]
+            },
+            "operations": {
+                "initialize_close_tasks": {
+                    "description": "Initialize standard close tasks for a period with schedule",
+                    "required": ["period", "period_end_date"],
+                    "optional": ["close_days", "assignees"]
+                },
+                "update_task_status": {
+                    "description": "Update the status of a close task",
+                    "required": ["task_id", "new_status"],
+                    "optional": ["notes", "completed_by"]
+                },
+                "get_close_progress": {
+                    "description": "Get overall close progress with metrics and health assessment",
+                    "required": ["period"],
+                    "optional": []
+                },
+                "identify_blockers": {
+                    "description": "Identify blocked tasks, their dependencies, and recommendations",
+                    "required": ["period"],
+                    "optional": []
+                },
+                "generate_close_calendar": {
+                    "description": "Generate close calendar with daily tasks and deadlines",
+                    "required": ["period", "period_end_date"],
+                    "optional": ["close_days"]
+                },
+                "get_critical_path": {
+                    "description": "Identify critical path tasks determining minimum close duration",
+                    "required": ["period"],
+                    "optional": []
+                },
+                "describe": {
+                    "description": "Return the input schema and available operations",
+                    "required": [],
+                    "optional": []
+                }
+            }
+        }
+    
     def getCriticalPath(
         self,
         periodName: str
@@ -687,7 +789,10 @@ def main():
         apiClient = createApiClient(inputData)
         manager = CloseManager(apiClient)
         
-        if operation == "initialize_close_tasks":
+        if operation == "describe":
+            result = manager.describe()
+        
+        elif operation == "initialize_close_tasks":
             validateRequiredFields(userInput, ["period", "period_end_date"])
             result = manager.initializeCloseTasks(
                 periodName=userInput["period"],
@@ -734,7 +839,7 @@ def main():
         else:
             raise ValueError(
                 f"Unknown operation: {operation}. "
-                f"Valid operations: initialize_close_tasks, update_task_status, "
+                f"Valid operations: describe, initialize_close_tasks, update_task_status, "
                 f"get_close_progress, identify_blockers, generate_close_calendar, get_critical_path"
             )
         
