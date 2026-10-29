@@ -1,8 +1,10 @@
 # GitHub Actions workflow to build and publish Docker images to ghcr.io
 #
 # Overview:
-#   Builds all 5 Finance STF Docker images and pushes to GitHub Container Registry
-#   Triggered on push to main branch or manual workflow dispatch
+#   Builds all 5 Finance STF Docker images and pushes to GitHub Container Registry.
+#   Manual dispatch only. A push to main does not build.
+#
+#   gh workflow run docker-publish.yml --ref <branch>
 #
 # Images published:
 #   - ghcr.io/d6e-ai/stf-financial-statements
@@ -14,13 +16,6 @@
 name: Build and Publish Docker Images
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'stf-*/**'
-      - 'shared/**'
-      - '.github/workflows/docker-publish.yml'
   workflow_dispatch:
 
 env:
